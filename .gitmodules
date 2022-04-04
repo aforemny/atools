@@ -1,0 +1,3 @@
+[submodule "optparse-applicative"]
+	path = optparse-applicative
+	url = github.com:aforemny/optparse-applicative.git

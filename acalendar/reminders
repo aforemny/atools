@@ -1,0 +1,29 @@
+1 First of every month. 
+31 31st of every month that has 31 days.
+Feb Every day in February
+6 Jan Every 6th of January
+29 Feb Every 29th of February
+1991 Every day in 1991
+1 1990 1st of every month in 1990
+23 1992 23rd of every month in 1992
+Feb 1991 Every day in Feb 1991
+Sep 1992 Every day in Sept 1992
+8 Jan 1991 8th January 1991.
+9 Mar 1992 9th March 1992.
+Sat Every Saturday
+Mon Tue Wed Thu Fri Every working day
+Mon Wed Every Monday and Wednesday
+1 Sat First Saturday of every month
+15 Mon Tue Wed Thu Fri \
+  1st working day after 15th of every month
+Mar Mon Every Monday in March
+Feb Mon Tue Wed Thu Fri Every working day in February
+1 Mar Mon First Monday in March
+15 July Sat Sun First Sat or Sun on or after 15 July
+1991 Sat Sun Every Saturday and Sunday in 1991
+15 1990 Mon 1st Mon after 15th of every month in 1990
+1 1990 Mon Tue Wed Thu Fri \
+  1st working day of every month in 1990 
+Feb 1991 Mon Wed Every Mon and Wed in Feb 1991.
+28 Oct 1990 Mon Tue Wed Thu Fri \
+  1st working day on or after 28 October 1990. 

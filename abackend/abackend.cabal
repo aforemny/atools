@@ -1,0 +1,20 @@
+cabal-version: 2.4
+name: abackend
+version: 0.1.0.0
+author: Alexander Foremny
+maintainer: aforemny@posteo.de
+
+executable abackend
+  main-is: Main.hs
+  build-depends:
+    base,
+    bytestring,
+    directory,
+    filepath,
+    http-types,
+    optparse-applicative,
+    transformers,
+    wai,
+    warp
+  hs-source-dirs: app
+  default-language: Haskell2010

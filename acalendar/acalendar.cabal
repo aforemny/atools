@@ -1,0 +1,61 @@
+cabal-version:      2.4
+name:               acalendar
+version:            0.1.0.0
+author:             Alexander Foremny
+maintainer:         aforemny@posteo.de
+
+common shared
+  default-language: Haskell2010
+  ghc-options: -Wall -Wno-name-shadowing
+
+library
+  import: shared
+  exposed-modules:
+    DateSpec
+    Event
+    File
+    Parser
+    TimeSpec
+    Weekday
+  build-depends:
+    base,
+    containers,
+    data-default,
+    iCalendar,
+    mtl,
+    parsec,
+    text,
+    time
+  hs-source-dirs: lib
+
+executable cal
+  import: shared
+  main-is: Main.hs
+  build-depends:
+    acalendar,
+    ansi-terminal,
+    base,
+    bytestring,
+    containers,
+    data-default,
+    directory,
+    filepath,
+    iCalendar,
+    optparse-applicative,
+    text,
+    time
+  hs-source-dirs: app
+
+test-suite test
+  import: shared
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  build-depends:
+    acalendar,
+    base,
+    hspec,
+    parsec,
+    QuickCheck,
+    text,
+    time
+  hs-source-dirs: tests

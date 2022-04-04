@@ -1,0 +1,28 @@
+cabal-version: 2.4
+name: astorage
+version: 0.1.0.0
+author: Alexander Foremny
+maintainer: aforemny@posteo.de
+
+library
+  main-is: Main.hs
+  exposed-modules:
+    Storage
+  build-depends:
+    base,
+    directory,
+    filepath,
+    process
+  hs-source-dirs: lib
+  default-language: Haskell2010
+
+executable astorage
+  main-is: Main.hs
+  exposed-modules:
+    Storage
+  build-depends:
+    astorage,
+    base,
+    optparse-applicative
+  hs-source-dirs: app
+  default-language: Haskell2010
