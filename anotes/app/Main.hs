@@ -13,19 +13,22 @@ import System.Exit
 import System.FilePath
 
 data Args
-  = ListArgs {includes :: [FilePath]}
+  = EditArgs {includes :: [FilePath], filePath :: FilePath}
+  | ListArgs {includes :: [FilePath]}
   | ShowArgs {includes :: [FilePath], filePath :: FilePath}
 
-listArgs, showArgs :: Parser Args
+editArgs, listArgs, showArgs :: Parser Args
+editArgs = EditArgs <$> includesArg <*> fileArg
 listArgs = ListArgs <$> includesArg
 showArgs = ShowArgs <$> includesArg <*> fileArg
 
-listCmd, showCmd :: Mod CommandFields Args
+editCmd, listCmd, showCmd :: Mod CommandFields Args
+editCmd = command "edit" (info editArgs fullDesc)
 listCmd = command "list" (info listArgs fullDesc)
 showCmd = command "show" (info showArgs fullDesc)
 
 mainArgs :: ParserInfo Args
-mainArgs = info (hsubparser (listCmd <> showCmd) <**> helper) idm
+mainArgs = info (hsubparser (editCmd <> listCmd <> showCmd) <**> helper) idm
 
 includesArg :: Parser [FilePath]
 includesArg = many (strOption (long "include" <> short 'I' <> metavar "DIR"))
@@ -40,14 +43,16 @@ fileArgComp =
     fmap (map S.toString) . S.listFiles =<< S.open includes
 
 main :: IO ()
-main =
+main = do
+  includes' <- maybe [] (splitOn ":") <$> lookupEnv "ATOOLS_PATH"
   execParser mainArgs >>= \case
+    EditArgs {..} -> do
+      h <- S.open (includes' ++ includes)
+      S.editFile h (S.fromString filePath)
     ListArgs {..} -> do
-      includes' <- maybe [] (splitOn ":") <$> lookupEnv "ATOOLS_PATH"
       mapM_ (putStrLn . S.toString)
         =<< S.listFiles
         =<< S.open (includes' ++ includes)
     ShowArgs {..} -> do
-      includes' <- maybe [] (splitOn ":") <$> lookupEnv "ATOOLS_PATH"
       h <- S.open (includes' ++ includes)
       putStrLn . maybe "" id =<< S.readFile h (S.fromString filePath)

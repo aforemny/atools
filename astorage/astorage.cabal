@@ -13,7 +13,8 @@ library
     directory,
     filepath,
     process,
-    split
+    split,
+    strict-io
   hs-source-dirs: lib
   default-language: Haskell2010
 

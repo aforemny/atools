@@ -6,27 +6,36 @@ module Storage
   ( Handle,
     open,
     deleteFile,
+    editFile,
     fileExists,
     listFiles,
     readFile,
     writeFile,
     Entry,
     fromString,
-    toString
+    toString,
   )
 where
 
 import Control.Arrow
 import Control.Exception
+import qualified Control.Exception as C
+import Control.Monad
 import Data.Either
 import Data.List
 import Data.List.Split
 import Data.Maybe
+import GHC.IO.Exception (IOErrorType (OtherError))
+import qualified GHC.IO.Handle.Types as GHC
 import System.Directory
+import System.Exit
 import System.FilePath
+import System.IO (hPutStrLn, stderr)
+import System.IO.Error (mkIOError)
+import System.IO.Strict (SIO)
+import qualified System.IO.Strict as SIO
 import System.Process
 import Prelude hiding (readFile, writeFile)
-import qualified Prelude
 
 data Handle = Handle {unHandle :: [Root]}
 
@@ -74,7 +83,12 @@ withCwd (Handle rs) b f = go rs
     go [] = pure Nothing
     go (r@(Root cwd) : rs) =
       if base r == b
-        then fmap Just (f cwd) `catch` (\(_ :: IOError) -> pure Nothing)
+        then
+          fmap Just (f cwd)
+            `catch` ( \(e :: IOError) -> do
+                        hPutStrLn stderr ("caught: " ++ show e)
+                        pure Nothing
+                    )
         else go rs
 
 fileExists :: Handle -> Entry -> IO Bool
@@ -83,17 +97,33 @@ fileExists h e@(Entry b (Rel fp)) = fmap isJust . withCwd h b $ \cwd ->
 
 writeFile :: Handle -> Entry -> String -> IO Bool
 writeFile h e@(Entry b (Rel fp)) s = do
-  doesExist <- fmap isJust . withCwd h b $ \cwd -> git cwd ("show HEAD:" ++ q fp)
+  doesExist <- fileExists h e
   fmap isJust . withCwd h b $ \cwd@(Abs cwd') -> do
-    Prelude.writeFile (cwd' </> fp) s
+    SIO.run $ SIO.writeFile (cwd' </> fp) s
     git cwd ("add " ++ q fp)
     let m = if doesExist then "update" else "init"
-    git cwd ("commit -m '" ++ commitMessage m e ++ "'")
+    git cwd ("commit -m " ++ q (commitMessage m e))
+
+editFile :: Handle -> Entry -> IO ()
+editFile h e@(Entry b (Rel fp)) = do
+  doesExist <- fileExists h e
+  fmap (const ()) . withCwd h b $ \cwd@(Abs cwd') -> do
+    s <-
+      if doesExist
+        then SIO.run $ SIO.readFile (cwd' </> fp)
+        else pure ""
+    withCwd h b $ \cwd -> editor cwd (q fp)
+    s' <- SIO.run $ SIO.readFile (cwd' </> fp)
+    when (s /= s') $ do
+      git cwd ("add " ++ q fp)
+      let m = if doesExist then "update" else "init"
+      git cwd ("commit -m " ++ q (commitMessage m e))
+      pure ()
 
 deleteFile :: Handle -> Entry -> IO ()
 deleteFile h e@(Entry b (Rel fp)) = fmap (const ()) . withCwd h b $ \cwd -> do
   git cwd ("rm " ++ q fp)
-  git cwd ("commit -m '" ++ commitMessage "delete" e ++ "'")
+  git cwd ("commit -m " ++ q (commitMessage "delete" e))
 
 listFiles :: Handle -> IO [Entry]
 listFiles =
@@ -105,13 +135,67 @@ listFiles =
     . unHandle
 
 git :: Abs FilePath -> String -> IO String
-git (Abs cwd) args =
-  readCreateProcess ((shell ("git " ++ args ++ " 2>/dev/null")) {cwd = Just cwd}) ""
+git (Abs cwd) args = do
+  hPutStrLn stderr ("+ " ++ cmd)
+  readCreateProcess ((shell cmd) {cwd = Just cwd}) ""
+  where
+    cmd = ("git " ++ args ++ " 2>/dev/null")
+
+editor :: Abs FilePath -> String -> IO ()
+editor (Abs cwd) args = do
+  hPutStrLn stderr ("+ " ++ cmd)
+  callCreateProcess ((shell cmd) {cwd = Just cwd})
+  where
+    cmd = ("${EDITOR-vi} " ++ args ++ " 2>/dev/null")
 
 commitMessage :: String -> Entry -> String
 commitMessage m (Entry (Base b) (Rel fp)) =
-  q b ++ "(" ++ q fp ++ "): " ++ q m
+  case fmap (takeDirectory *** joinPath) (uncons (splitPath fp)) of
+    Just (d, fp) -> d ++ "(" ++ fp ++ "): " ++ m
+    Nothing -> fp ++ ": " ++ m
 
 q :: String -> String
 q s =
   show s
+
+callCreateProcess :: CreateProcess -> IO ()
+callCreateProcess cp = do
+  exit_code <- withCreateProcess_
+    "callCommand"
+    cp {delegate_ctlc = True}
+    $ \_ _ _ p ->
+      waitForProcess p
+  case exit_code of
+    ExitSuccess -> return ()
+    ExitFailure r -> processFailedException "callCommand" cmd args r
+  where
+    (cmd, args) =
+      case cmdspec cp of
+        ShellCommand cmd -> (cmd, [])
+        RawCommand fp args -> (fp, args)
+
+processFailedException :: String -> String -> [String] -> Int -> IO a
+processFailedException fun cmd args exit_code =
+  ioError
+    ( mkIOError
+        OtherError
+        ( fun ++ ": " ++ cmd
+            ++ concatMap ((' ' :) . show) args
+            ++ " (exit "
+            ++ show exit_code
+            ++ ")"
+        )
+        Nothing
+        Nothing
+    )
+
+withCreateProcess_ ::
+  String ->
+  CreateProcess ->
+  (Maybe GHC.Handle -> Maybe GHC.Handle -> Maybe GHC.Handle -> ProcessHandle -> IO a) ->
+  IO a
+withCreateProcess_ fun c action =
+  C.bracketOnError
+    (createProcess_ fun c)
+    cleanupProcess
+    (\(m_in, m_out, m_err, ph) -> action m_in m_out m_err ph)
