@@ -39,27 +39,17 @@ main :: IO ()
 main = do
   execParser mainArgs >>= \case
     DeleteArgs {..} -> do
-      case includes of
-        (i : is) -> do
-          h <- open i is
-          deleteFile h filePath
-          pure ()
+      h <- open includes
+      deleteFile h (fromString filePath)
+      pure ()
     ListArgs {..} -> do
-      case includes of
-        (i : is) -> do
-          h <- open i is
-          mapM_ (\(r, fp) -> putStrLn (toString r ++ ":" ++ fp))
-            =<< listFiles h
+      mapM_ (putStrLn . toString) =<< listFiles =<< open includes
     ReadArgs {..} -> do
-      case includes of
-        (i : is) -> do
-          h <- open i is
-          maybe (exitWith (ExitFailure 1)) putStrLn =<< readFile h filePath
-          pure ()
+      h <- open includes
+      maybe (exitWith (ExitFailure 1)) putStrLn =<< readFile h (fromString filePath)
+      pure ()
     WriteArgs {..} -> do
-      case includes of
-        (i : is) -> do
-          h <- open i is
-          writeFile h filePath =<< getContents
-          pure ()
+      h <- open includes
+      writeFile h (fromString filePath) =<< getContents
+      pure ()
   exitWith ExitSuccess

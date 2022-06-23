@@ -37,27 +37,17 @@ fileArgComp :: Completer
 fileArgComp =
   mkCompleter $ \input -> do
     includes <- maybe [] (splitOn ":") <$> lookupEnv "ATOOLS_PATH"
-    case includes of
-      (i : is) ->
-        fmap (map (\(r, fp) -> takeBaseName (S.toString r) ++ ":" ++ fp))
-          . S.listFiles
-          =<< S.open i is
-      _ ->
-        pure []
+    fmap (map S.toString) . S.listFiles =<< S.open includes
 
 main :: IO ()
 main =
   execParser mainArgs >>= \case
     ListArgs {..} -> do
-      includes' <- splitOn ":" <$> getEnv "ATOOLS_PATH"
-      case includes' ++ includes of
-        (i : is) -> do
-          mapM_ (\(r, fp) -> putStrLn (takeBaseName (S.toString r) ++ ":" ++ fp))
-            =<< S.listFiles
-            =<< S.open i is
+      includes' <- maybe [] (splitOn ":") <$> lookupEnv "ATOOLS_PATH"
+      mapM_ (putStrLn . S.toString)
+        =<< S.listFiles
+        =<< S.open (includes' ++ includes)
     ShowArgs {..} -> do
-      includes' <- splitOn ":" <$> getEnv "ATOOLS_PATH"
-      case includes' ++ includes of
-        (i : is) -> do
-          h <- S.open i is
-          putStrLn . maybe "" id =<< S.readFile h filePath
+      includes' <- maybe [] (splitOn ":") <$> lookupEnv "ATOOLS_PATH"
+      h <- S.open (includes' ++ includes)
+      putStrLn . maybe "" id =<< S.readFile h (S.fromString filePath)

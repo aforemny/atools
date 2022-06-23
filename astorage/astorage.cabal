@@ -12,7 +12,8 @@ library
     base,
     directory,
     filepath,
-    process
+    process,
+    split
   hs-source-dirs: lib
   default-language: Haskell2010
 
