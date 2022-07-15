@@ -23,7 +23,7 @@ let
           })
           (package "abackend" ./abackend { })
           (package "acalendar" ./acalendar { })
-          (package "anotes" ./anotes { })
+          (package "anote" ./anote { })
           (package "astorage" ./astorage { })
         ];
   };
@@ -32,12 +32,12 @@ rec {
   inherit (haskellPackages)
     abackend
     acalendar
-    anotes
+    anote
     astorage;
   atools = [
     abackend
     acalendar
-    anotes
+    anote
     astorage
   ];
   shell = haskellPackages.shellFor {

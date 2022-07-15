@@ -1,10 +1,10 @@
 cabal-version:      2.4
-name:               anotes
+name:               anote
 version:            0.1.0.0
 author:             Alexander Foremny
 maintainer:         aforemny@posteo.de
 
-executable anotes
+executable anote
     main-is:          Main.hs
     build-depends:
       astorage,
