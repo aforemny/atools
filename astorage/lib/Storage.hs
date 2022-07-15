@@ -136,14 +136,14 @@ listFiles =
 
 git :: Abs FilePath -> String -> IO String
 git (Abs cwd) args = do
-  hPutStrLn stderr ("+ " ++ cmd)
+  -- hPutStrLn stderr ("+ " ++ cmd)
   readCreateProcess ((shell cmd) {cwd = Just cwd}) ""
   where
     cmd = ("git " ++ args ++ " 2>/dev/null")
 
 editor :: Abs FilePath -> String -> IO ()
 editor (Abs cwd) args = do
-  hPutStrLn stderr ("+ " ++ cmd)
+  -- hPutStrLn stderr ("+ " ++ cmd)
   callCreateProcess ((shell cmd) {cwd = Just cwd})
   where
     cmd = ("${EDITOR-vi} " ++ args ++ " 2>/dev/null")
