@@ -28,7 +28,7 @@ library
     time
   hs-source-dirs: lib
 
-executable cal
+executable acalendar
   import: shared
   main-is: Main.hs
   build-depends:
