@@ -50,11 +50,11 @@ data Entry = Entry Base (Rel FilePath)
 
 fromString :: String -> Entry
 fromString s =
-  let (b : fp') = splitOn ":" s
-   in Entry (Base b) (Rel (intercalate ":" fp'))
+  let (b : fp') = splitOn "/" s
+   in Entry (Base b) (Rel (intercalate "/" fp'))
 
 toString :: Entry -> String
-toString (Entry (Base b) (Rel fp)) = b ++ ":" ++ fp
+toString (Entry (Base b) (Rel fp)) = b </> fp
 
 data Abs a
   = Abs a
