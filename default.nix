@@ -25,6 +25,7 @@ let
           (package "acalendar" ./acalendar { })
           (package "anote" ./anote { })
           (package "astorage" ./astorage { })
+          (package "atask" ./atask { })
         ];
   };
 in
@@ -33,12 +34,14 @@ rec {
     abackend
     acalendar
     anote
-    astorage;
+    astorage
+    atask;
   atools = [
     abackend
     acalendar
     anote
     astorage
+    atask
   ];
   shell = haskellPackages.shellFor {
     packages = (_: atools);

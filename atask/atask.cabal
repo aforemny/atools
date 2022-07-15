@@ -1,0 +1,19 @@
+cabal-version:      2.4
+name:               atask
+version:            0.1.0.0
+author:             Alexander Foremny
+maintainer:         aforemny@posteo.de
+
+executable atask
+    main-is:          Main.hs
+    build-depends:
+      astorage,
+      base,
+      filepath,
+      optparse-applicative,
+      pandoc,
+      pandoc-types,
+      split,
+      text
+    hs-source-dirs:   app
+    default-language: Haskell2010

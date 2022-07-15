@@ -4,6 +4,7 @@
 
 module Storage
   ( Handle,
+    filePath,
     open,
     deleteFile,
     editFile,
@@ -55,6 +56,9 @@ fromString s =
 
 toString :: Entry -> String
 toString (Entry (Base b) (Rel fp)) = b </> fp
+
+filePath :: Entry -> FilePath
+filePath (Entry _ (Rel fp)) = fp
 
 data Abs a
   = Abs a
