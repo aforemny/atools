@@ -42,12 +42,13 @@ data Handle = Handle {unHandle :: [Root]}
 
 data Root = Root (Abs FilePath)
 
-data Base = Base String deriving (Eq)
+data Base = Base String deriving (Show, Eq)
 
 base :: Root -> Base
 base (Root (Abs cwd)) = Base (takeBaseName cwd)
 
 data Entry = Entry Base (Rel FilePath)
+  deriving (Show, Eq)
 
 fromString :: String -> Entry
 fromString s =
@@ -60,11 +61,11 @@ toString (Entry (Base b) (Rel fp)) = b </> fp
 filePath :: Entry -> FilePath
 filePath (Entry _ (Rel fp)) = fp
 
-data Abs a
-  = Abs a
+data Abs a = Abs a
+  deriving (Show, Eq)
 
-data Rel a
-  = Rel a
+data Rel a = Rel a
+  deriving (Show, Eq)
 
 open :: [FilePath] -> IO Handle
 open fps = Handle . rights <$> mapM root fps
@@ -84,7 +85,7 @@ readFile h e@(Entry b (Rel fp)) = withCwd h b $ \cwd ->
 withCwd :: Handle -> Base -> (Abs FilePath -> IO a) -> IO (Maybe a)
 withCwd (Handle rs) b f = go rs
   where
-    go [] = pure Nothing
+    go [] = fail "base does not exist in handle"
     go (r@(Root cwd) : rs) =
       if base r == b
         then
@@ -103,6 +104,7 @@ writeFile :: Handle -> Entry -> String -> IO Bool
 writeFile h e@(Entry b (Rel fp)) s = do
   doesExist <- fileExists h e
   fmap isJust . withCwd h b $ \cwd@(Abs cwd') -> do
+    createDirectoryIfMissing True (takeDirectory (cwd' </> fp))
     SIO.run $ SIO.writeFile (cwd' </> fp) s
     git cwd ("add " ++ q fp)
     let m = if doesExist then "update" else "init"
