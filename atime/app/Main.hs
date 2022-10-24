@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Arrow
+import Control.Arrow hiding ((<+>))
 import Control.Monad
 import Data.Function ((&))
 import Data.List
@@ -12,10 +12,13 @@ import Data.List.Split
 import qualified Data.Map as M
 import Data.Maybe (catMaybes)
 import Data.Time
+import qualified Data.Tree as T
 import Debug.Trace
 import Duration (Duration)
 import qualified Duration
 import Options.Applicative
+import Prettyprinter
+import Prettyprinter.Render.Terminal
 import qualified Storage as S
 import System.Directory
 import System.Environment
@@ -210,12 +213,67 @@ main = do
                   ls
             totalDuration =
               Duration.sum (M.elems perProjectDurations)
+        let durations =
+              T.unfoldTree
+                ( \prefix ->
+                    let prefixLen = length prefix
+                        reachableDurations =
+                          ( M.filterWithKey
+                              ( \key _ ->
+                                  prefix `isPrefixOf` key
+                              )
+                              perProjectDurations
+                          )
+                     in ( ( prefix,
+                            Duration.sum (M.elems reachableDurations)
+                          ),
+                          nub
+                            . map ((++) prefix)
+                            . catMaybes
+                            . map
+                              ( \case
+                                  [] -> Nothing
+                                  (x : _) -> Just x
+                              )
+                            . map (split (keepDelimsR (onSublist "/")))
+                            . filter (/= "")
+                            . map (drop prefixLen)
+                            . sort
+                            $ M.keys reachableDurations
+                        )
+                )
+                ""
         mapM_
           ( \(project, duration) ->
               putStrLn (project ++ " " ++ Duration.toString duration)
           )
           (M.assocs perProjectDurations)
         putStrLn (Duration.toString totalDuration)
+        let right s =
+              pageWidth
+                ( \(AvailablePerLine maxChars ribbonWidth) ->
+                    column
+                      ( \column ->
+                          indent
+                            ( floor (fromIntegral maxChars * ribbonWidth)
+                                - column
+                                - length s
+                            )
+                            (pretty s)
+                      )
+                )
+        putDoc
+          ( T.foldTree
+              ( \(prefix, duration) ss ->
+                  vsep (pretty prefix <+> right (Duration.toString duration) : map (indent 2) ss)
+              )
+              durations
+          )
+    {-
+    putDoc
+      ( annotate (color Red <> italicized) (pretty "foo")
+          <+> annotate (colorDull Red <> bold) (pretty "bar")
+      )-}
     ListArgs {..} ->
       do
         h <- S.open (includes' ++ includes)

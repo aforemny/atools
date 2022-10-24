@@ -18,6 +18,8 @@ executable atime
       filepath,
       optparse-applicative,
       parsec,
+      prettyprinter,
+      prettyprinter-ansi-terminal,
       split,
       time
     hs-source-dirs:   app
