@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
@@ -21,13 +22,17 @@ import qualified Data.Time.Format as Format
 import Event (Event)
 import qualified Event
 import qualified File
-import Options.Applicative (CommandFields, Completer, Mod, Parser, ParserInfo, action, bashCompleter, command, completer, execParser, fullDesc, help, helper, hsubparser, idm, info, metavar, strArgument, short, long, strOption)
+import Network.Protocol.HTTP.DAV
+import Network.URI (URI)
+import qualified Network.URI as Uri
+import Options.Applicative (CommandFields, Completer, Mod, Parser, ParserInfo, action, bashCompleter, command, completer, execParser, fullDesc, help, helper, hsubparser, idm, info, long, maybeReader, metavar, option, short, strArgument, strOption)
 import qualified System.Console.ANSI as Ansi
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((<.>), (</>))
 import Text.ICalendar.Printer (printICalendar)
 import Text.ICalendar.Types
+import qualified Text.XML.Cursor as Xml
 import TimeSpec (TimeSpec (TimeSpec))
 import qualified TimeSpec
 
@@ -39,17 +44,23 @@ data Args
       { sources :: [FilePath],
         output :: FilePath
       }
+  | SyncArgs
+      { sources :: [FilePath],
+        url :: URI
+      }
 
-exportArgs, listArgs :: Parser Args
+exportArgs, listArgs, syncArgs :: Parser Args
 exportArgs = ExportArgs <$> sourcesArg <*> outputArg
 listArgs = ListArgs <$> sourcesArg
+syncArgs = SyncArgs <$> sourcesArg <*> urlArg
 
-exportCmd, listCmd :: Mod CommandFields Args
+exportCmd, listCmd, syncCmd :: Mod CommandFields Args
 exportCmd = command "export" (info exportArgs fullDesc)
 listCmd = command "list" (info listArgs fullDesc)
+syncCmd = command "sync" (info syncArgs fullDesc)
 
 mainArgs :: ParserInfo Args
-mainArgs = info (hsubparser (listCmd <> exportCmd) <**> helper) idm
+mainArgs = info (hsubparser (listCmd <> exportCmd <> syncCmd) <**> helper) idm
 
 sourcesArg :: Parser [FilePath]
 sourcesArg =
@@ -73,6 +84,16 @@ outputArg =
         <> metavar "DIR"
         <> help "Export directory"
         <> action "directory"
+    )
+
+urlArg :: Parser URI
+urlArg =
+  option
+    (maybeReader Uri.parseAbsoluteURI)
+    ( long "url"
+        <> short 'u'
+        <> metavar "URL"
+        <> help "Export URL"
     )
 
 main :: IO ()
@@ -114,7 +135,7 @@ main = do
                           ( \e ->
                               case Event.timeSpec e of
                                 Just (TimeSpec start end) ->
-                                  (1 :: Int, start, - end, Event.title e)
+                                  (1 :: Int, start, -end, Event.title e)
                                 Nothing ->
                                   (0, 0, 0, Event.title e)
                           )
@@ -129,6 +150,43 @@ main = do
             let uid = fst (head (Map.keys (vcEvents ical)))
                 fp = output </> LazyText.unpack uid <.> "ics"
              in ByteString.writeFile fp (printICalendar def ical)
+        )
+        $ map (\(d, (n, e)) -> Event.toICalendar d n e) $
+          concatMap
+            (\d -> map (d,) (zip [1 ..] (filter (Event.satisfies d) events)))
+            ([toEnum (fromEnum curDay + n) | n <- [0 .. 90]])
+    SyncArgs {..} -> do
+      Right fs <-
+        evalDAVT (show url) $
+          concat
+            . ( \doc ->
+                  Xml.fromDocument doc
+                    Xml.$// Xml.element "{DAV:}response"
+                      Xml.&| ( Xml.checkNode
+                                 ( \node ->
+                                     Xml.fromNode node
+                                       Xml.$// Xml.element "{urn:ietf:params:xml:ns:caldav}calendar-data"
+                                 )
+                             )
+                      Xml.&/ Xml.element "{DAV:}href"
+                      Xml.&/ Xml.content
+              )
+            <$> caldavReportM
+      mapM_
+        ( \f -> do
+            putStrLn ("- " ++ Text.unpack f)
+            evalDAVT
+              (show (url {Uri.uriPath = Text.unpack f}))
+              delContentM
+        )
+        fs
+      mapM_
+        ( \ical -> do
+            let uid = fst (head (Map.keys (vcEvents ical)))
+                fp = LazyText.unpack uid <.> "ics"
+            putStrLn ("+ " ++ fp)
+            evalDAVT (show (url {Uri.uriPath = Uri.uriPath url </> fp})) $
+              putContentM (Just "text/calendar", printICalendar def ical)
         )
         $ map (\(d, (n, e)) -> Event.toICalendar d n e) $
           concatMap

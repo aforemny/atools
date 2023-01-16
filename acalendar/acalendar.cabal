@@ -43,7 +43,12 @@ executable acalendar
     iCalendar,
     optparse-applicative,
     text,
-    time
+    time,
+    DAV,
+    mtl,
+    xml-conduit,
+    xml-hamlet,
+    network-uri
   hs-source-dirs: app
 
 test-suite test

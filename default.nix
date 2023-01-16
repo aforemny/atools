@@ -51,6 +51,10 @@ rec {
     buildInputs = [
       haskellPackages.cabal-install
       haskellPackages.ormolu
+      pkgs.vdirsyncer
     ];
+    shellHook = ''
+      HISTFILE=${pkgs.lib.escapeShellArg ./.}/.history; export HISTFILE
+    '';
   };
 }
