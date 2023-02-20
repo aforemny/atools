@@ -22,17 +22,14 @@ file =
   File
     <$> ( many
             ( skipMany
-                ( void space
-                    <|> void newline
-                    <|> comment
-                )
-                *> event
+                (void space <|> void newline)
+                *> (Left <$> comment <|> Right <$> event)
             )
         )
     <* eof
 
-comment :: Parser ()
-comment = void (string ";" *> many (noneOf "\n")) <?> "comment"
+comment :: Parser String
+comment = string ";" *> many (noneOf "\n") <?> "comment"
 
 string :: Text -> Parser Text
 string s = pack <$> Parsec.string (unpack s)

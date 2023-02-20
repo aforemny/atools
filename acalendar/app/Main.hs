@@ -6,17 +6,15 @@
 
 module Main where
 
-import Control.Applicative (some, (<**>))
 import qualified Data.ByteString.Lazy as ByteString
 import Data.Default (Default (def))
-import Data.List (nub, sort)
 import qualified Data.List as List
+import Data.List.Split (splitOn)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Text.Lazy as LazyText
-import Data.Time.Calendar (Day)
 import qualified Data.Time.Clock as Clock
 import qualified Data.Time.Format as Format
 import Event (Event)
@@ -25,9 +23,10 @@ import qualified File
 import Network.Protocol.HTTP.DAV
 import Network.URI (URI)
 import qualified Network.URI as Uri
-import Options.Applicative (CommandFields, Completer, Mod, Parser, ParserInfo, action, bashCompleter, command, completer, execParser, fullDesc, help, helper, hsubparser, idm, info, long, maybeReader, metavar, option, short, strArgument, strOption)
+import Options.Applicative
+import qualified Storage as S
 import qualified System.Console.ANSI as Ansi
-import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
+import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((<.>), (</>))
 import Text.ICalendar.Printer (printICalendar)
@@ -35,46 +34,40 @@ import Text.ICalendar.Types
 import qualified Text.XML.Cursor as Xml
 import TimeSpec (TimeSpec (TimeSpec))
 import qualified TimeSpec
+import Prelude hiding (readFile)
 
 data Args
-  = ListArgs
-      { sources :: [FilePath]
-      }
-  | ExportArgs
-      { sources :: [FilePath],
-        output :: FilePath
-      }
-  | SyncArgs
-      { sources :: [FilePath],
-        url :: URI
-      }
+  = EditArgs {includes :: [FilePath], filePath :: FilePath}
+  | ExportArgs {includes :: [FilePath], output :: FilePath}
+  | ListArgs {includes :: [FilePath]}
+  | SyncArgs {includes :: [FilePath], url :: URI}
 
-exportArgs, listArgs, syncArgs :: Parser Args
-exportArgs = ExportArgs <$> sourcesArg <*> outputArg
-listArgs = ListArgs <$> sourcesArg
-syncArgs = SyncArgs <$> sourcesArg <*> urlArg
+editArgs, exportArgs, listArgs, syncArgs :: Parser Args
+editArgs = EditArgs <$> includesArg <*> fileArg
+exportArgs = ExportArgs <$> includesArg <*> outputArg
+listArgs = ListArgs <$> includesArg
+syncArgs = SyncArgs <$> includesArg <*> urlArg
 
-exportCmd, listCmd, syncCmd :: Mod CommandFields Args
+editCmd, exportCmd, listCmd, syncCmd :: Mod CommandFields Args
+editCmd = command "edit" (info editArgs fullDesc)
 exportCmd = command "export" (info exportArgs fullDesc)
 listCmd = command "list" (info listArgs fullDesc)
 syncCmd = command "sync" (info syncArgs fullDesc)
 
 mainArgs :: ParserInfo Args
-mainArgs = info (hsubparser (listCmd <> exportCmd <> syncCmd) <**> helper) idm
+mainArgs = info (hsubparser (editCmd <> exportCmd <> listCmd <> syncCmd) <**> helper) idm
 
-sourcesArg :: Parser [FilePath]
-sourcesArg =
-  some
-    ( strArgument
-        ( metavar "SOURCE"
-            <> help "File or directory to read calendar entries from"
-            <> completer sourceCompleter
-        )
-    )
+includesArg :: Parser [FilePath]
+includesArg = many (strOption (long "include" <> short 'I' <> metavar "DIR"))
 
-sourceCompleter :: Completer
-sourceCompleter =
-  bashCompleter "directory" <> bashCompleter "file"
+fileArg :: Parser FilePath
+fileArg = strArgument (metavar "FILE" <> completer fileArgComp)
+
+fileArgComp :: Completer
+fileArgComp =
+  mkCompleter $ \_ -> do
+    includes <- maybe [] (splitOn ":") <$> lookupEnv "ATOOLS_PATH"
+    fmap (map S.toString) . S.listFiles =<< S.open includes
 
 outputArg :: Parser FilePath
 outputArg =
@@ -100,12 +93,21 @@ main :: IO ()
 main = do
   args <- execParser mainArgs
   curDay <- Clock.utctDay <$> Clock.getCurrentTime
-  filePaths <- collectSources (sources args)
-  events <- concat <$> mapM readEvents filePaths
+  includes' <- maybe [] (splitOn ":") <$> lookupEnv "ATOOLS_PATH"
   case args of
-    ListArgs _ -> do
-      let displayDay :: Day -> [Event] -> [Event]
-          displayDay day es = filter (Event.satisfies day) es
+    EditArgs {..} -> do
+      h <- S.open (includes' ++ includes)
+      let e = S.fromString filePath
+      f <- readFile h e
+      _ <- S.writeFile h e (File.write (File.prune curDay f))
+      S.editFile h e
+    ListArgs {..} -> do
+      h <- S.open (includes' ++ includes)
+      es <-
+        (fmap concat . mapM (readEvents h))
+          =<< ( filter ((==) "calendar/reminders" . S.filePath)
+                  <$> S.listFiles h
+              )
       mapM_
         ( \(day, es) -> do
             Ansi.setSGR [Ansi.SetConsoleIntensity Ansi.BoldIntensity]
@@ -126,7 +128,7 @@ main = do
         )
         ( catMaybes $
             map
-              ( \day -> case displayDay day events of
+              ( \day -> case filter (Event.satisfies day) es of
                   [] -> Nothing
                   es ->
                     Just
@@ -145,6 +147,12 @@ main = do
               [toEnum (fromEnum curDay + n) | n <- [0 .. 1]]
         )
     ExportArgs {..} -> do
+      h <- S.open (includes' ++ includes)
+      es <-
+        (fmap concat . mapM (readEvents h))
+          =<< ( filter ((==) "calendar/reminders" . S.filePath)
+                  <$> S.listFiles h
+              )
       mapM_
         ( \ical ->
             let uid = fst (head (Map.keys (vcEvents ical)))
@@ -153,9 +161,15 @@ main = do
         )
         $ map (\(d, (n, e)) -> Event.toICalendar d n e) $
           concatMap
-            (\d -> map (d,) (zip [1 ..] (filter (Event.satisfies d) events)))
+            (\d -> map (d,) (zip [1 ..] (filter (Event.satisfies d) es)))
             ([toEnum (fromEnum curDay + n) | n <- [0 .. 90]])
     SyncArgs {..} -> do
+      h <- S.open (includes' ++ includes)
+      es <-
+        (fmap concat . mapM (readEvents h))
+          =<< ( filter ((==) "calendar/reminders" . S.filePath)
+                  <$> S.listFiles h
+              )
       Right fs <-
         evalDAVT (show url) $
           concat
@@ -190,35 +204,24 @@ main = do
         )
         $ map (\(d, (n, e)) -> Event.toICalendar d n e) $
           concatMap
-            (\d -> map (d,) (zip [1 ..] (filter (Event.satisfies d) events)))
+            (\d -> map (d,) (zip [1 ..] (filter (Event.satisfies d) es)))
             ([toEnum (fromEnum curDay + n) | n <- [0 .. 90]])
 
-collectSources :: [FilePath] -> IO [FilePath]
-collectSources filePaths =
-  let go :: FilePath -> IO [FilePath]
-      go filePath = do
-        isFile <- doesFileExist filePath
-        if isFile
-          then return (if List.isPrefixOf "." filePath then [] else [filePath])
-          else do
-            isDirectory <- doesDirectoryExist filePath
-            if isDirectory
-              then
-                fmap concat . mapM go
-                  =<< ( map (filePath </>)
-                          <$> filter (not . List.isPrefixOf ".")
-                          <$> listDirectory filePath
-                      )
-              else return []
-   in sort . nub . concat <$> mapM go filePaths
+readFile :: S.Handle -> S.Entry -> IO File.File
+readFile h e = do
+  S.readFile h e >>= \case
+    Nothing ->
+      -- TODO io exception
+      die "does not exist"
+    Just s -> case File.parse (S.toString e) (Text.pack s) of
+      Left es ->
+        die es
+      Right f ->
+        return f
 
-readEvents :: FilePath -> IO [Event]
-readEvents filePath =
-  File.readFile filePath >>= \case
-    Left es ->
-      die es
-    Right file ->
-      return (File.events file)
+readEvents :: S.Handle -> S.Entry -> IO [Event]
+readEvents h e = do
+  File.events <$> readFile h e
 
 die :: Show a => a -> IO b
 die s = do

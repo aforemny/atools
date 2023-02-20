@@ -1,8 +1,13 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module DateSpec where
 
+import Data.List (intercalate)
 import Data.Time.Calendar (Day)
 import qualified Data.Time.Calendar as Calendar
+import Data.Time.Format.ISO8601 (iso8601Show)
 import Weekday (Weekday (..))
+import qualified Weekday
 import Prelude hiding (until)
 
 data DateSpec = DateSpec
@@ -15,6 +20,36 @@ data DateSpec = DateSpec
     until :: Maybe Day
   }
   deriving (Show, Eq)
+
+toString :: DateSpec -> String
+toString (DateSpec {..}) =
+  intercalate
+    " "
+    ( concat
+        [ map show days
+            ++ map
+              ( \n -> case n of
+                  1 -> "Jan"
+                  2 -> "Feb"
+                  3 -> "Mar"
+                  4 -> "Apr"
+                  5 -> "May"
+                  6 -> "Jun"
+                  7 -> "Jul"
+                  8 -> "Aug"
+                  9 -> "Sep"
+                  10 -> "Oct"
+                  11 -> "Nov"
+                  12 -> "Dec"
+              )
+              months
+            ++ map show years
+            ++ map Weekday.toString weekdays
+            ++ maybe [] ((: []) . (++) "-" . show) back
+            ++ maybe [] ((: []) . ((++) "FROM ") . iso8601Show) from
+            ++ maybe [] ((: []) . ((++) "UNTIL ") . iso8601Show) until
+        ]
+    )
 
 empty :: DateSpec
 empty =
@@ -73,3 +108,12 @@ satisfies date dateSpec =
                     [] -> True
                     _ -> elem dWeekday (weekdays dateSpec)
                 ]
+
+-- TODO garbage
+occurrenceAfter :: Day -> DateSpec -> Maybe Day
+occurrenceAfter date dateSpec =
+  case filter
+    (\day -> satisfies day dateSpec)
+    ([toEnum (fromEnum date + n) | n <- [0 .. 2 * 360]]) of
+    [] -> Nothing
+    (x : _) -> Just x

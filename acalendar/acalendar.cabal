@@ -34,21 +34,23 @@ executable acalendar
   build-depends:
     acalendar,
     ansi-terminal,
+    astorage,
     base,
     bytestring,
     containers,
     data-default,
+    DAV,
     directory,
     filepath,
     iCalendar,
+    mtl,
+    network-uri,
     optparse-applicative,
+    split,
     text,
     time,
-    DAV,
-    mtl,
     xml-conduit,
-    xml-hamlet,
-    network-uri
+    xml-hamlet
   hs-source-dirs: app
 
 test-suite test

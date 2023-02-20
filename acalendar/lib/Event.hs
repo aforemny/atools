@@ -1,9 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
-module Event (Event (..), satisfies, toICalendar, tags) where
+module Event (Event (..), toString, satisfies, toICalendar, tags
+) where
 
 import Data.Default (Default (def))
 import Data.Function ((&))
+import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Text (Text)
@@ -17,6 +20,7 @@ import DateSpec (DateSpec)
 import qualified DateSpec
 import Text.ICalendar.Types
 import TimeSpec (TimeSpec (TimeSpec))
+import qualified TimeSpec
 import Prelude hiding (until)
 
 data Event = Event
@@ -36,6 +40,18 @@ tags e =
 
 satisfies :: Day -> Event -> Bool
 satisfies day = DateSpec.satisfies day . dateSpec
+
+toString :: Event -> String
+toString (Event {..}) =
+  intercalate
+    " "
+    ( filter
+        (not . null)
+        [ DateSpec.toString dateSpec,
+          maybe "" TimeSpec.toString timeSpec,
+          Text.unpack title
+        ]
+    )
 
 toICalendar :: Day -> Int -> Event -> VCalendar
 toICalendar day n e =
