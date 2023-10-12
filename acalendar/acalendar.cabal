@@ -50,7 +50,10 @@ executable acalendar
     text,
     time,
     xml-conduit,
-    xml-hamlet
+    xml-hamlet,
+    blaze-markup,
+    tz,
+    http-conduit
   hs-source-dirs: app
 
 test-suite test

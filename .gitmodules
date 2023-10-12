@@ -1,3 +1,6 @@
 [submodule "optparse-applicative"]
 	path = optparse-applicative
 	url = github.com:aforemny/optparse-applicative.git
+[submodule "iCalendar"]
+	path = iCalendar
+	url = github.com:aforemny/iCalendar.git

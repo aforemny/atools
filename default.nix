@@ -20,6 +20,7 @@ let
         [
           (self: super: {
             optparse-applicative_atools = pkgs.haskell.lib.dontCheck (super.callCabal2nix "optparse-applicative" ./optparse-applicative { });
+            iCalendar = pkgs.haskell.lib.dontCheck (super.callCabal2nix "iCalendar" ./iCalendar { });
           })
           (package "abackend" ./abackend { })
           (package "acalendar" ./acalendar { })
